@@ -8,11 +8,28 @@ import (
 
 var screen tcell.Screen
 
+func initScreen() {
+    var err error
+    screen, err = tcell.NewScreen()
+    if err != nil {
+        log.Fatalf("%+v", err)
+    }
+
+    if err = screen.Init(); err != nil {
+        log.Fatalf("%+v", err)
+    }
+
+	screen.EnableMouse()
+	screen.Clear()
+}
+
 type Rect struct{ x, y, w, h int }
+func (r Rect) Values() (int, int, int, int) { return r.x, r.y, r.w, r.h }
 
 type Widget interface {
 	Render()
 	Resize(rect Rect)
+    GetRect() Rect
 }
 
 type TextWidget struct {
@@ -38,6 +55,10 @@ func (w *TextWidget) Resize(rect Rect) {
 	w.rect = rect
 }
 
+func (w *TextWidget) GetRect() Rect {
+    return w.rect
+}
+
 type ListWidget struct {
 	rect   Rect
 	lines  []string
@@ -53,8 +74,52 @@ func (w *ListWidget) Render() {
 		}
 	}
 }
+
 func (w *ListWidget) Resize(rect Rect) {
 	w.rect = rect
+}
+
+func (w *ListWidget) GetRect() Rect {
+    return w.rect
+}
+
+
+type BorderWrapperWidget struct {
+	rect   Rect
+    inner  Widget
+}
+
+func (self *BorderWrapperWidget) Render() {
+    self.inner.Render()
+
+    // innerRect := self.inner.rect 
+
+    x, y, w, h := self.rect.Values()
+
+    style := tcell.StyleDefault
+	for i := 0; i < w; i++ {
+		screen.SetContent(i+x, y, tcell.RuneHLine, nil, style)
+		screen.SetContent(i+x, y+w-1, tcell.RuneHLine, nil, style)
+	}
+	for j := 0; j < h; j++ {
+		screen.SetContent(x,     j+y, tcell.RuneVLine, nil, style)
+		screen.SetContent(x+w-1, j+y, tcell.RuneVLine, nil, style)
+	}
+
+    screen.SetContent(x,     y, tcell.RuneULCorner, nil, style)
+    screen.SetContent(x+w-1, y, tcell.RuneURCorner, nil, style)
+    screen.SetContent(x,     y+h-1, tcell.RuneLLCorner, nil, style)
+    screen.SetContent(x+w-1, y+h-1, tcell.RuneLRCorner, nil, style)
+}
+
+func (w *BorderWrapperWidget) Resize(rect Rect) {
+    w.rect = rect
+    innerRect := Rect{x: rect.x+1, y: rect.y+1, w: rect.w-1, h: rect.h-1}
+	w.inner.Resize(innerRect)
+}
+
+func (w *BorderWrapperWidget) GetRect() Rect {
+    return w.rect
 }
 
 type Compositor struct {
@@ -62,17 +127,14 @@ type Compositor struct {
 	widgets  []Widget
 }
 
+func (c *Compositor) Render() {
+    for _, w := range c.widgets {
+        w.Render()
+    }
+}
+
 func run() {
-	var err error
-	screen, err = tcell.NewScreen()
-	if err != nil {
-		log.Fatalf("%+v", err)
-	}
-
-	if err = screen.Init(); err != nil {
-		log.Fatalf("%+v", err)
-	}
-
+    initScreen()
 	cleanup := func() {
 		err := recover()
 		screen.Fini()
@@ -81,9 +143,6 @@ func run() {
 		}
 	}
 	defer cleanup()
-
-	screen.EnableMouse()
-	screen.Clear()
 
 	termW, termH := screen.Size()
 	c := Compositor{termRect: Rect{w: termW, h: termH}}
@@ -94,15 +153,20 @@ func run() {
 	listWidget := ListWidget{lines: []string{"UVXYлфорывылофрвло", "ABCDфлорвлофыр'", "лофырвлдыфрввфалр"}}
 	listWidget.Resize(Rect{x: 0, y: 5, w: 4, h: 2})
 
+    innerTextWidget := TextWidget{text: "!@#$%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
+    borderedWidget := BorderWrapperWidget{inner: &innerTextWidget}
+	borderedWidget.Resize(Rect{x: 10, y: 10, w: 10, h: 10})
+
 	c.widgets = []Widget{
 		&textWidget,
 		&listWidget,
+        &borderedWidget,
 	}
 
 	for {
-		for _, w := range c.widgets {
-			w.Render()
-		}
+		screen.Fill(' ', tcell.StyleDefault)
+
+        c.Render()
 
 		screen.Show()
 
@@ -110,8 +174,10 @@ func run() {
 
 		switch ev := ev.(type) {
 		case *tcell.EventResize:
-			// c.termRect =
-            // do layout (resize widgets)
+            // Do layouting...
+            // termW, termH := ev.Size()
+            // c.termRect = Rect{w: termW, h: termH}
+            c.Render()
 			screen.Sync()
 		case *tcell.EventKey:
 			if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
