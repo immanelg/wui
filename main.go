@@ -38,16 +38,14 @@ type TextWidget struct {
 }
 
 func (w *TextWidget) Render() {
-	runeOrSpace := func(idx int) rune {
-		if idx < len(w.text) {
-			return rune(w.text[idx])
-		} else {
-			return ' '
-		}
-	}
-	for j := 0; j < w.rect.h; j++ {
-		for i := 0; i < w.rect.w; i++ {
-			screen.SetContent(i+w.rect.x, j+w.rect.y, runeOrSpace(j*w.rect.w+i), nil, tcell.StyleDefault)
+    for i := 0; i < w.rect.w; i++ {
+        for j := 0; j < w.rect.h; j++ {
+            // text is wrapped
+            var r rune = ' '
+            if idx := j*w.rect.w+i; idx < len(w.text) { 
+                r = rune(w.text[idx])
+            }
+			screen.SetContent(i+w.rect.x, j+w.rect.y, r, nil, tcell.StyleDefault)
 		}
 	}
 }
@@ -84,22 +82,20 @@ func (w *ListWidget) GetRect() Rect {
 }
 
 
-type BorderWrapperWidget struct {
+type BorderedWidget struct {
 	rect   Rect
     inner  Widget
 }
 
-func (self *BorderWrapperWidget) Render() {
+func (self *BorderedWidget) Render() {
     self.inner.Render()
-
-    // innerRect := self.inner.rect 
 
     x, y, w, h := self.rect.Values()
 
     style := tcell.StyleDefault
 	for i := 0; i < w; i++ {
 		screen.SetContent(i+x, y, tcell.RuneHLine, nil, style)
-		screen.SetContent(i+x, y+w-1, tcell.RuneHLine, nil, style)
+		screen.SetContent(i+x, y+h-1, tcell.RuneHLine, nil, style)
 	}
 	for j := 0; j < h; j++ {
 		screen.SetContent(x,     j+y, tcell.RuneVLine, nil, style)
@@ -112,19 +108,20 @@ func (self *BorderWrapperWidget) Render() {
     screen.SetContent(x+w-1, y+h-1, tcell.RuneLRCorner, nil, style)
 }
 
-func (w *BorderWrapperWidget) Resize(rect Rect) {
+func (w *BorderedWidget) Resize(rect Rect) {
     w.rect = rect
-    innerRect := Rect{x: rect.x+1, y: rect.y+1, w: rect.w-1, h: rect.h-1}
+    innerRect := Rect{x: rect.x+1, y: rect.y+1, w: rect.w-2, h: rect.h-2}
 	w.inner.Resize(innerRect)
 }
 
-func (w *BorderWrapperWidget) GetRect() Rect {
+func (w *BorderedWidget) GetRect() Rect {
     return w.rect
 }
 
 type Compositor struct {
 	termRect Rect
 	widgets  []Widget
+    focusedWidgetId int
 }
 
 func (c *Compositor) Render() {
@@ -132,6 +129,10 @@ func (c *Compositor) Render() {
         w.Render()
     }
 }
+
+func (c *Compositor) HandleKey(key *tcell.EventKey) {
+}
+
 
 func run() {
     initScreen()
@@ -147,20 +148,22 @@ func run() {
 	termW, termH := screen.Size()
 	c := Compositor{termRect: Rect{w: termW, h: termH}}
 
-	textWidget := TextWidget{text: "123456789abcefghikl"}
-	textWidget.Resize(Rect{x: 0, y: 0, w: 5, h: 20})
+    textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
+    textWidgetBordered := BorderedWidget{inner: &textWidget}
+    textWidgetBordered.Resize(Rect{x: 0, y: 0, w: 5, h: 4})
 
-	listWidget := ListWidget{lines: []string{"UVXYлфорывылофрвло", "ABCDфлорвлофыр'", "лофырвлдыфрввфалр"}}
-	listWidget.Resize(Rect{x: 0, y: 5, w: 4, h: 2})
+    listWidget := ListWidget{lines: []string{"111111111", "222222222'", "333333333333333", "4444"}}
+    listWidgetBordered := BorderedWidget{inner: &listWidget}
+    listWidgetBordered.Resize(Rect{x: 0, y: 4, w: 7, h: 5})
 
-    innerTextWidget := TextWidget{text: "!@#$%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
-    borderedWidget := BorderWrapperWidget{inner: &innerTextWidget}
-	borderedWidget.Resize(Rect{x: 10, y: 10, w: 10, h: 10})
+    textWidget2 := TextWidget{text: "!@#$%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
+    textwidget2Bordered := BorderedWidget{inner: &textWidget2}
+    textwidget2Bordered.Resize(Rect{x: 0, y: 9, w: 10, h: 10})
 
 	c.widgets = []Widget{
-		&textWidget,
-		&listWidget,
-        &borderedWidget,
+		&listWidgetBordered,
+        &textWidgetBordered,
+        &textwidget2Bordered,
 	}
 
 	for {
@@ -180,6 +183,7 @@ func run() {
             c.Render()
 			screen.Sync()
 		case *tcell.EventKey:
+            c.HandleKey(ev)
 			if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
 				return
 			}
