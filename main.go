@@ -74,9 +74,11 @@ func (w *ListWidget) Render() {
 
 	lineCount := len(w.lines)
 	for j := y; j <= y1 && j-y < lineCount; j++ {
-		lineLen := len(w.lines[j-y])
+        line := w.lines[j-y]
+		lineLen := len(line)
 		for i := x; i <= x1 && (i-x) < lineLen; i++ {
-			screen.SetContent(i, j, rune(w.lines[j-y][i-x]), nil, tcell.StyleDefault)
+            r := rune(line[i-x])
+			screen.SetContent(i, j, r, nil, tcell.StyleDefault)
 		}
 	}
 }
@@ -130,7 +132,7 @@ func (self *BorderedWidget) Render() {
 
 func (w *BorderedWidget) Resize(rect Rect) {
 	w.rect = rect
-	innerRect := Rect{x: rect.x + 1, y: rect.y + 1, x1: rect.x1 - 2, y1: rect.y1 - 2}
+	innerRect := Rect{x: rect.x + 1, y: rect.y + 1, x1: rect.x1 - 1, y1: rect.y1 - 1}
 	w.inner.Resize(innerRect)
 }
 
@@ -207,18 +209,20 @@ func run() {
 	textWidgetBordered := BorderedWidget{inner: &textWidget}
 	textWidgetBordered.Resize(Rect{x: 0, y: 0, x1: 5, y1: 4})
 
-	listWidget := ListWidget{lines: []string{"111111111", "222222222'", "333333333333333", "4444"}}
+	listWidget := ListWidget{
+        lines: []string{"111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
+    }
 	listWidgetBordered := BorderedWidget{inner: &listWidget}
-	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 4})
+	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 6})
 
 	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
     textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
-	textwidget2Bordered.Resize(Rect{x: 0, y: 5, x1: termW-1, y1: 10})
+	textwidget2Bordered.Resize(Rect{x: 0, y: 7, x1: termW-1, y1: 12})
 
     left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
     right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
     splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
-    splittingWidget.Resize(Rect{x: 0, y: 11, x1: 30, y1: 30})
+    splittingWidget.Resize(Rect{x: 0, y: 13, x1: 30, y1: 32})
 
 	c.widgets = []Widget{
 		&listWidgetBordered,
