@@ -145,6 +145,7 @@ func (c *Compositor) Resize(rect Rect) {
 type SplitWidget struct {
     rect Rect
     left, right Widget
+    horizontal bool
 }
 
 func (w *SplitWidget) Render() {
@@ -155,13 +156,17 @@ func (w *SplitWidget) Render() {
 func (w *SplitWidget) Resize(rect Rect) {
     w.rect = rect
 
-    xCenter := (rect.x + rect.x1) / 2
+    if w.horizontal {
+        yCenter := (rect.y + rect.y1) / 2
 
-    leftRect := Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1}
-    w.left.Resize(leftRect)
+        w.left.Resize(Rect{x: rect.x, y: rect.y, x1: rect.x1, y1: yCenter})
+        w.right.Resize(Rect{x: rect.x, y: min(yCenter+1, rect.y1), x1: rect.x1, y1: rect.y1})
+    } else {
+        xCenter := (rect.x + rect.x1) / 2
 
-    rightRect := Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1}
-    w.right.Resize(rightRect)
+        w.left.Resize(Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1})
+        w.right.Resize(Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1})
+    }
 }
 
 func (w *SplitWidget) GetRect() Rect {
@@ -197,7 +202,7 @@ func run() {
 
     left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
     right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGH"}
-    splittingWidget := SplitWidget{left: &left, right: &right}
+    splittingWidget := SplitWidget{left: &left, right: &right, horizontal: true}
     splittingWidget.Resize(Rect{x: 0, y: 11, x1: 30, y1: 15})
 
 	c.widgets = []Widget{
