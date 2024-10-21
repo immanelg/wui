@@ -151,7 +151,7 @@ func run() {
 	defer cleanup()
 
 	termW, termH := screen.Size()
-	c := Compositor{termRect: Rect{x1: termW, y1: termH}}
+	c := Compositor{termRect: Rect{x1: termW-1, y1: termH-1}}
 
 	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
 	textWidgetBordered := BorderedWidget{inner: &textWidget}
