@@ -148,12 +148,24 @@ type SplitWidget struct {
 }
 
 func (w *SplitWidget) Render() {
+    w.left.Render()
+    w.right.Render()
 }
 
 func (w *SplitWidget) Resize(rect Rect) {
     w.rect = rect
-    w.left.Resize(...)
-    w.right.Resize(...)
+
+    xCenter := (rect.x + rect.x1) / 2
+
+    leftRect := Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1}
+    w.left.Resize(leftRect)
+
+    rightRect := Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1}
+    w.right.Resize(rightRect)
+}
+
+func (w *SplitWidget) GetRect() Rect {
+    return w.rect
 }
 
 
@@ -183,10 +195,16 @@ func run() {
 	textwidget2Bordered := BorderedWidget{inner: &textWidget2}
 	textwidget2Bordered.Resize(Rect{x: 0, y: 5, x1: termW-1, y1: 10})
 
+    left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
+    right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGH"}
+    splittingWidget := SplitWidget{left: &left, right: &right}
+    splittingWidget.Resize(Rect{x: 0, y: 11, x1: 30, y1: 15})
+
 	c.widgets = []Widget{
 		&listWidgetBordered,
 		&textWidgetBordered,
 		&textwidget2Bordered,
+        &splittingWidget,
 	}
 
 	for {
