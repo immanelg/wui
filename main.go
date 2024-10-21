@@ -66,6 +66,7 @@ type ListWidget struct {
 	rect   Rect
 	lines  []string
 	offset int
+    selected int
 }
 
 func (w *ListWidget) Render() {
@@ -78,6 +79,15 @@ func (w *ListWidget) Render() {
 			screen.SetContent(i, j, rune(w.lines[j-y][i-x]), nil, tcell.StyleDefault)
 		}
 	}
+}
+
+
+func (w *ListWidget) Down() {
+    w.selected = min(len(w.lines)-1, w.selected+1)
+}
+
+func (w *ListWidget) Up() {
+    w.selected = max(0, w.selected+1)
 }
 
 func (w *ListWidget) Resize(rect Rect) {
@@ -145,6 +155,7 @@ func (c *Compositor) Resize(rect Rect) {
 type SplitWidget struct {
     rect Rect
     left, right Widget
+    ratio int
     horizontal bool
 }
 
@@ -157,12 +168,12 @@ func (w *SplitWidget) Resize(rect Rect) {
     w.rect = rect
 
     if w.horizontal {
-        yCenter := (rect.y + rect.y1) / 2
+        yCenter := rect.y + (rect.y1 - rect.y) * w.ratio / 100
 
         w.left.Resize(Rect{x: rect.x, y: rect.y, x1: rect.x1, y1: yCenter})
         w.right.Resize(Rect{x: rect.x, y: min(yCenter+1, rect.y1), x1: rect.x1, y1: rect.y1})
     } else {
-        xCenter := (rect.x + rect.x1) / 2
+        xCenter := rect.x + (rect.x1 - rect.x) * w.ratio / 100
 
         w.left.Resize(Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1})
         w.right.Resize(Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1})
@@ -200,10 +211,10 @@ func run() {
 	textwidget2Bordered := BorderedWidget{inner: &textWidget2}
 	textwidget2Bordered.Resize(Rect{x: 0, y: 5, x1: termW-1, y1: 10})
 
-    left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
-    right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGH"}
-    splittingWidget := SplitWidget{left: &left, right: &right, horizontal: true}
-    splittingWidget.Resize(Rect{x: 0, y: 11, x1: 30, y1: 15})
+    left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
+    right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
+    splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
+    splittingWidget.Resize(Rect{x: 0, y: 11, x1: 30, y1: 30})
 
 	c.widgets = []Widget{
 		&listWidgetBordered,
