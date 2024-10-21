@@ -101,6 +101,7 @@ func (w *ListWidget) GetRect() Rect {
 type BorderedWidget struct {
 	rect  Rect
 	inner Widget
+    title string
 }
 
 func (self *BorderedWidget) Render() {
@@ -109,11 +110,14 @@ func (self *BorderedWidget) Render() {
 	x, y, x1, y1 := self.rect.Values()
 
 	style := tcell.StyleDefault
-	for i := x; i < x1; i++ {
+	for i := x+1; i < x1; i++ {
 		screen.SetContent(i, y, tcell.RuneHLine, nil, style)
 		screen.SetContent(i, y1, tcell.RuneHLine, nil, style)
 	}
-	for j := y; j < y1; j++ {
+    for i := x+1; i < x1 && i-(x+1) < len(self.title); i++ {
+        screen.SetContent(i, y, rune(self.title[i-(x+1)]), nil, style)
+    }
+	for j := y+1; j < y1; j++ {
 		screen.SetContent(x, j, tcell.RuneVLine, nil, style)
 		screen.SetContent(x1, j, tcell.RuneVLine, nil, style)
 	}
@@ -208,7 +212,7 @@ func run() {
 	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 4})
 
 	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
-	textwidget2Bordered := BorderedWidget{inner: &textWidget2}
+    textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
 	textwidget2Bordered.Resize(Rect{x: 0, y: 5, x1: termW-1, y1: 10})
 
     left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
