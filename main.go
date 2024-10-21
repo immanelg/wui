@@ -125,7 +125,7 @@ func (w *BorderedWidget) GetRect() Rect {
 }
 
 type Compositor struct {
-	termRect        Rect
+	rect        Rect
 	widgets         []Widget
 	focusedWidgetId int
 }
@@ -139,6 +139,24 @@ func (c *Compositor) Render() {
 func (c *Compositor) HandleKey(key *tcell.EventKey) {
 }
 
+func (c *Compositor) Resize(rect Rect) {
+}
+
+type SplitWidget struct {
+    rect Rect
+    left, right Widget
+}
+
+func (w *SplitWidget) Render() {
+}
+
+func (w *SplitWidget) Resize(rect Rect) {
+    w.rect = rect
+    w.left.Resize(...)
+    w.right.Resize(...)
+}
+
+
 func run() {
 	initScreen()
 	cleanup := func() {
@@ -151,7 +169,7 @@ func run() {
 	defer cleanup()
 
 	termW, termH := screen.Size()
-	c := Compositor{termRect: Rect{x1: termW-1, y1: termH-1}}
+	c := Compositor{rect: Rect{x1: termW-1, y1: termH-1}}
 
 	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
 	textWidgetBordered := BorderedWidget{inner: &textWidget}
@@ -182,9 +200,8 @@ func run() {
 
 		switch ev := ev.(type) {
 		case *tcell.EventResize:
-			// Do layouting...
 			// termW, termH := ev.Size()
-			// c.termRect = Rect{w: termW, h: termH}
+			//          c.rect = (Rect{x1: termW-1, y1: termY-1})
 			c.Render()
 			screen.Sync()
 		case *tcell.EventKey:
