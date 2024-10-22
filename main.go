@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/gdamore/tcell"
 )
@@ -54,13 +56,9 @@ func (w *TextWidget) Render() {
 		}
 	}
 }
-func (w *TextWidget) Resize(rect Rect) {
-	w.rect = rect
-}
+func (w *TextWidget) Resize(rect Rect) { w.rect = rect }
 
-func (w *TextWidget) GetRect() Rect {
-	return w.rect
-}
+func (w *TextWidget) GetRect() Rect { return w.rect }
 
 type ListWidget struct {
 	rect     Rect
@@ -72,15 +70,15 @@ type ListWidget struct {
 func (w *ListWidget) Render() {
 	x, y, x1, y1 := w.rect.Values()
 
-	// lines := w.lines[w.offset:]
-	lines := w.lines
-	lineCount := len(lines)
+	lineCount := len(w.lines)
 	for j := y; j <= y1 && j-y < lineCount; j++ {
-        lineIdx := w.offset+j-y
-		line := lines[lineIdx]
+		lineIdx := w.offset + j - y
+		line := w.lines[lineIdx]
 		lineLen := len(line)
 		st := tcell.StyleDefault
-		if lineIdx == w.selected { st = tcell.StyleDefault.Underline(true) }
+		if lineIdx == w.selected {
+			st = tcell.StyleDefault.Underline(true)
+		}
 		for i := x; i <= x1 && i-x < lineLen; i++ {
 			r := rune(line[i-x])
 			screen.SetContent(i, j, r, nil, st)
@@ -90,25 +88,26 @@ func (w *ListWidget) Render() {
 
 func (w *ListWidget) Down() {
 	w.selected = min(len(w.lines)-1, w.selected+1)
-    if w.selected > w.offset + w.rect.y1 - w.rect.y {
-        w.offset++
-    }
+	if w.selected > w.offset+w.rect.y1-w.rect.y {
+		w.offset++
+	}
 }
 
 func (w *ListWidget) Up() {
 	w.selected = max(0, w.selected-1)
-    if w.selected < w.offset {
-        w.offset--
-    }
+	if w.selected < w.offset {
+		w.offset--
+	}
 }
 
 func (w *ListWidget) Resize(rect Rect) {
 	w.rect = rect
+	if w.offset > rect.x {
+		w.offset = w.rect.x
+	}
 }
 
-func (w *ListWidget) GetRect() Rect {
-	return w.rect
-}
+func (w *ListWidget) GetRect() Rect { return w.rect }
 
 type BorderedWidget struct {
 	rect  Rect
@@ -214,7 +213,6 @@ func run() {
 	termW, termH := screen.Size()
 	c := Compositor{rect: Rect{x1: termW - 1, y1: termH - 1}}
 
-
 	//
 	// type C struct{
 	//     t TextWidget
@@ -231,12 +229,23 @@ func run() {
 	textWidgetBordered.Resize(Rect{x: 0, y: 0, x1: 5, y1: 4})
 
 	listWidget := ListWidget{
-		lines:  []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
-        selected: 2,
-		offset: 1,
+		lines:    []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
+		selected: 2,
+		offset:   1,
 	}
 	listWidgetBordered := BorderedWidget{inner: &listWidget}
 	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 6})
+
+    logsChan := make(chan string, 1024)
+    go func() {
+        c := 0
+        for {
+            time.Sleep(3 * time.Second)
+            listWidget.lines = append(listWidget.lines, fmt.Sprintf("INFO %d%d%d", c, c, c))
+            c++
+        }
+    }()
+
 
 	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
 	textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
@@ -254,6 +263,13 @@ func run() {
 		&splittingWidget,
 	}
 
+    terminalEventsChan := make(chan tcell.Event, 16)
+    go func() {
+        for {
+            terminalEventsChan <- screen.PollEvent()
+        }
+    }()
+
 	for {
 		screen.Fill(' ', tcell.StyleDefault)
 
@@ -261,21 +277,28 @@ func run() {
 
 		screen.Show()
 
-		ev := screen.PollEvent()
+        select {
+        case ev := <-terminalEventsChan:
+            switch ev := ev.(type) {
+            case *tcell.EventResize:
+                // termW, termH := ev.Size()
+                // c.rect = (Rect{x1: termW-1, y1: termY-1})
+                c.Render()
+                screen.Sync()
+            case *tcell.EventKey:
+                if ev.Rune() == 'j' {
+                    listWidget.Down()
+                }
+                if ev.Rune() == 'k' {
+                    listWidget.Up()
+                }
+                if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
+                    return
+                }
+            }
+        case <-logsChan:
+        }
 
-		switch ev := ev.(type) {
-		case *tcell.EventResize:
-			// termW, termH := ev.Size()
-			//          c.rect = (Rect{x1: termW-1, y1: termY-1})
-			c.Render()
-			screen.Sync()
-		case *tcell.EventKey:
-            if ev.Rune() == 'j' { listWidget.Down() }
-            if ev.Rune() == 'k' { listWidget.Up() }
-			if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
-				return
-			}
-		}
 	}
 
 }
