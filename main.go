@@ -105,7 +105,7 @@ func (w *ListWidget) Up() {
 
 func (w *ListWidget) Last() {
 	w.selected = max(len(w.lines)-1, 0)
-	w.offset = max(0, len(w.lines)-(w.rect.y1-w.rect.y))
+	w.offset = max(0, len(w.lines)-1-(w.rect.y1-w.rect.y))
 }
 
 func (w *ListWidget) First() {
@@ -119,26 +119,28 @@ func (w *ListWidget) Resize(rect Rect) {
 
 func (w *ListWidget) GetRect() Rect { return w.rect }
 
-type BorderedWidget struct {
-	rect  Rect
-	inner Widget
-	title string
+type WrapperWidget struct {
+	rect    Rect
+	inner   Widget
+	title   string
+	padding int
 }
 
-func (self *BorderedWidget) Render() {
-	self.inner.Render()
+func (w *WrapperWidget) Render() {
+	w.inner.Render()
 
-	x, y, x1, y1 := self.rect.Values()
+	x, y, x1, y1 := w.rect.Values()
+	p := w.padding
 
 	style := tcell.StyleDefault
-	for i := x + 1; i < x1; i++ {
+	for i := x + 1; i <= x1-1; i++ {
 		screen.SetContent(i, y, tcell.RuneHLine, nil, style)
 		screen.SetContent(i, y1, tcell.RuneHLine, nil, style)
 	}
-	for i := x + 1; i < x1 && i-(x+1) < len(self.title); i++ {
-		screen.SetContent(i, y, rune(self.title[i-(x+1)]), nil, style)
+	for i := x + 1 + p; i <= x1-1-p && i-x-1-p < len(w.title); i++ {
+		screen.SetContent(i, y, rune(w.title[i-x-1-p]), nil, style)
 	}
-	for j := y + 1; j < y1; j++ {
+	for j := y + 1; j <= y1-1; j++ {
 		screen.SetContent(x, j, tcell.RuneVLine, nil, style)
 		screen.SetContent(x1, j, tcell.RuneVLine, nil, style)
 	}
@@ -149,13 +151,14 @@ func (self *BorderedWidget) Render() {
 	screen.SetContent(x1, y1, tcell.RuneLRCorner, nil, style)
 }
 
-func (w *BorderedWidget) Resize(rect Rect) {
+func (w *WrapperWidget) Resize(rect Rect) {
 	w.rect = rect
-	innerRect := Rect{x: rect.x + 1, y: rect.y + 1, x1: rect.x1 - 1, y1: rect.y1 - 1}
+	p := w.padding
+	innerRect := Rect{x: rect.x + 1 + p, y: rect.y + 1 + p, x1: rect.x1 - 1 - p, y1: rect.y1 - 1 - p}
 	w.inner.Resize(innerRect)
 }
 
-func (w *BorderedWidget) GetRect() Rect {
+func (w *WrapperWidget) GetRect() Rect {
 	return w.rect
 }
 
@@ -199,13 +202,13 @@ type Compositor struct {
 
 func (c *Compositor) Start() {
 	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
-	textWidgetBordered := BorderedWidget{inner: &textWidget}
+	textWidgetBordered := WrapperWidget{inner: &textWidget}
 
 	listWidget := ListWidget{
 		lines:    []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999", "aaaa", "bbbbbbb", "cccccc", "dddddd"},
 		selected: 2,
 	}
-	listWidgetBordered := BorderedWidget{inner: &listWidget}
+	listWidgetBordered := WrapperWidget{inner: &listWidget}
 
 	logs := make(chan string, 1024)
 	go func() {
@@ -222,7 +225,7 @@ func (c *Compositor) Start() {
 	}()
 
 	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
-	textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
+	textwidget2Bordered := WrapperWidget{inner: &textWidget2, title: "title"}
 
 	left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
 	right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
