@@ -63,33 +63,43 @@ func (w *TextWidget) GetRect() Rect {
 }
 
 type ListWidget struct {
-	rect   Rect
-	lines  []string
-	offset int
-    selected int
+	rect     Rect
+	lines    []string
+	offset   int
+	selected int
 }
 
 func (w *ListWidget) Render() {
 	x, y, x1, y1 := w.rect.Values()
 
-	lineCount := len(w.lines)
+	// lines := w.lines[w.offset:]
+	lines := w.lines
+	lineCount := len(lines)
 	for j := y; j <= y1 && j-y < lineCount; j++ {
-        line := w.lines[j-y]
+        lineIdx := w.offset+j-y
+		line := lines[lineIdx]
 		lineLen := len(line)
-		for i := x; i <= x1 && (i-x) < lineLen; i++ {
-            r := rune(line[i-x])
-			screen.SetContent(i, j, r, nil, tcell.StyleDefault)
+		st := tcell.StyleDefault
+		if lineIdx == w.selected { st = tcell.StyleDefault.Underline(true) }
+		for i := x; i <= x1 && i-x < lineLen; i++ {
+			r := rune(line[i-x])
+			screen.SetContent(i, j, r, nil, st)
 		}
 	}
 }
 
-
 func (w *ListWidget) Down() {
-    w.selected = min(len(w.lines)-1, w.selected+1)
+	w.selected = min(len(w.lines)-1, w.selected+1)
+    if w.selected > w.offset + w.rect.y1 - w.rect.y {
+        w.offset++
+    }
 }
 
 func (w *ListWidget) Up() {
-    w.selected = max(0, w.selected+1)
+	w.selected = max(0, w.selected-1)
+    if w.selected < w.offset {
+        w.offset--
+    }
 }
 
 func (w *ListWidget) Resize(rect Rect) {
@@ -103,7 +113,7 @@ func (w *ListWidget) GetRect() Rect {
 type BorderedWidget struct {
 	rect  Rect
 	inner Widget
-    title string
+	title string
 }
 
 func (self *BorderedWidget) Render() {
@@ -112,14 +122,14 @@ func (self *BorderedWidget) Render() {
 	x, y, x1, y1 := self.rect.Values()
 
 	style := tcell.StyleDefault
-	for i := x+1; i < x1; i++ {
+	for i := x + 1; i < x1; i++ {
 		screen.SetContent(i, y, tcell.RuneHLine, nil, style)
 		screen.SetContent(i, y1, tcell.RuneHLine, nil, style)
 	}
-    for i := x+1; i < x1 && i-(x+1) < len(self.title); i++ {
-        screen.SetContent(i, y, rune(self.title[i-(x+1)]), nil, style)
-    }
-	for j := y+1; j < y1; j++ {
+	for i := x + 1; i < x1 && i-(x+1) < len(self.title); i++ {
+		screen.SetContent(i, y, rune(self.title[i-(x+1)]), nil, style)
+	}
+	for j := y + 1; j < y1; j++ {
 		screen.SetContent(x, j, tcell.RuneVLine, nil, style)
 		screen.SetContent(x1, j, tcell.RuneVLine, nil, style)
 	}
@@ -141,7 +151,7 @@ func (w *BorderedWidget) GetRect() Rect {
 }
 
 type Compositor struct {
-	rect        Rect
+	rect            Rect
 	widgets         []Widget
 	focusedWidgetId int
 }
@@ -159,37 +169,36 @@ func (c *Compositor) Resize(rect Rect) {
 }
 
 type SplitWidget struct {
-    rect Rect
-    left, right Widget
-    ratio int
-    horizontal bool
+	rect        Rect
+	left, right Widget
+	ratio       int
+	horizontal  bool
 }
 
 func (w *SplitWidget) Render() {
-    w.left.Render()
-    w.right.Render()
+	w.left.Render()
+	w.right.Render()
 }
 
 func (w *SplitWidget) Resize(rect Rect) {
-    w.rect = rect
+	w.rect = rect
 
-    if w.horizontal {
-        yCenter := rect.y + (rect.y1 - rect.y) * w.ratio / 100
+	if w.horizontal {
+		yCenter := rect.y + (rect.y1-rect.y)*w.ratio/100
 
-        w.left.Resize(Rect{x: rect.x, y: rect.y, x1: rect.x1, y1: yCenter})
-        w.right.Resize(Rect{x: rect.x, y: min(yCenter+1, rect.y1), x1: rect.x1, y1: rect.y1})
-    } else {
-        xCenter := rect.x + (rect.x1 - rect.x) * w.ratio / 100
+		w.left.Resize(Rect{x: rect.x, y: rect.y, x1: rect.x1, y1: yCenter})
+		w.right.Resize(Rect{x: rect.x, y: min(yCenter+1, rect.y1), x1: rect.x1, y1: rect.y1})
+	} else {
+		xCenter := rect.x + (rect.x1-rect.x)*w.ratio/100
 
-        w.left.Resize(Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1})
-        w.right.Resize(Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1})
-    }
+		w.left.Resize(Rect{x: rect.x, y: rect.y, x1: xCenter, y1: rect.y1})
+		w.right.Resize(Rect{x: min(xCenter+1, rect.x1), y: rect.y, x1: rect.x1, y1: rect.y1})
+	}
 }
 
 func (w *SplitWidget) GetRect() Rect {
-    return w.rect
+	return w.rect
 }
-
 
 func run() {
 	initScreen()
@@ -203,32 +212,46 @@ func run() {
 	defer cleanup()
 
 	termW, termH := screen.Size()
-	c := Compositor{rect: Rect{x1: termW-1, y1: termH-1}}
+	c := Compositor{rect: Rect{x1: termW - 1, y1: termH - 1}}
+
+
+	//
+	// type C struct{
+	//     t TextWidget
+	//     l ListWidget
+	//     s SplitWidget
+	// }
+	// func (c *C) Resize(r Rect) {
+	//     c.t.Resize(/*...*/)
+	//     c.l.Resize(/*...*/)
+	// }
 
 	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
 	textWidgetBordered := BorderedWidget{inner: &textWidget}
 	textWidgetBordered.Resize(Rect{x: 0, y: 0, x1: 5, y1: 4})
 
 	listWidget := ListWidget{
-        lines: []string{"111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
-    }
+		lines:  []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
+        selected: 2,
+		offset: 1,
+	}
 	listWidgetBordered := BorderedWidget{inner: &listWidget}
 	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 6})
 
 	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
-    textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
-	textwidget2Bordered.Resize(Rect{x: 0, y: 7, x1: termW-1, y1: 12})
+	textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
+	textwidget2Bordered.Resize(Rect{x: 0, y: 7, x1: termW - 1, y1: 12})
 
-    left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
-    right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
-    splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
-    splittingWidget.Resize(Rect{x: 0, y: 13, x1: 30, y1: 32})
+	left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
+	right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
+	splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
+	splittingWidget.Resize(Rect{x: 0, y: 13, x1: 30, y1: 32})
 
 	c.widgets = []Widget{
 		&listWidgetBordered,
 		&textWidgetBordered,
 		&textwidget2Bordered,
-        &splittingWidget,
+		&splittingWidget,
 	}
 
 	for {
@@ -247,7 +270,8 @@ func run() {
 			c.Render()
 			screen.Sync()
 		case *tcell.EventKey:
-			c.HandleKey(ev)
+            if ev.Rune() == 'j' { listWidget.Down() }
+            if ev.Rune() == 'k' { listWidget.Up() }
 			if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
 				return
 			}
