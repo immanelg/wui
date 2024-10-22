@@ -73,6 +73,9 @@ func (w *ListWidget) Render() {
 	lineCount := len(w.lines)
 	for j := y; j <= y1 && j-y < lineCount; j++ {
 		lineIdx := w.offset + j - y
+		if lineIdx >= len(w.lines) {
+			continue
+		}
 		line := w.lines[lineIdx]
 		lineLen := len(line)
 		st := tcell.StyleDefault
@@ -100,11 +103,18 @@ func (w *ListWidget) Up() {
 	}
 }
 
+func (w *ListWidget) Last() {
+	w.selected = max(len(w.lines)-1, 0)
+	w.offset = max(0, len(w.lines)-(w.rect.y1-w.rect.y))
+}
+
+func (w *ListWidget) First() {
+	w.selected = 0
+	w.offset = 0
+}
+
 func (w *ListWidget) Resize(rect Rect) {
 	w.rect = rect
-	if w.offset > rect.x {
-		w.offset = w.rect.x
-	}
 }
 
 func (w *ListWidget) GetRect() Rect { return w.rect }
@@ -149,24 +159,6 @@ func (w *BorderedWidget) GetRect() Rect {
 	return w.rect
 }
 
-type Compositor struct {
-	rect            Rect
-	widgets         []Widget
-	focusedWidgetId int
-}
-
-func (c *Compositor) Render() {
-	for _, w := range c.widgets {
-		w.Render()
-	}
-}
-
-func (c *Compositor) HandleKey(key *tcell.EventKey) {
-}
-
-func (c *Compositor) Resize(rect Rect) {
-}
-
 type SplitWidget struct {
 	rect        Rect
 	left, right Widget
@@ -199,6 +191,111 @@ func (w *SplitWidget) GetRect() Rect {
 	return w.rect
 }
 
+type Compositor struct {
+	rect            Rect
+	widgets         []Widget
+	focusedWidgetId int
+}
+
+func (c *Compositor) Start() {
+	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
+	textWidgetBordered := BorderedWidget{inner: &textWidget}
+
+	listWidget := ListWidget{
+		lines:    []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999", "aaaa", "bbbbbbb", "cccccc", "dddddd"},
+		selected: 2,
+	}
+	listWidgetBordered := BorderedWidget{inner: &listWidget}
+
+	logs := make(chan string, 1024)
+	go func() {
+		c := 0
+		for {
+			time.Sleep(1500 * time.Millisecond)
+			if c%2 == 0 {
+				logs <- fmt.Sprintf("INFO %d%d%d", c, c, c)
+			} else {
+				logs <- fmt.Sprintf("WARN %d%d%d", c, c, c)
+			}
+			c++
+		}
+	}()
+
+	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
+	textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
+
+	left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
+	right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
+	splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
+
+	c.widgets = []Widget{
+		&listWidgetBordered,
+		&textWidgetBordered,
+		&textwidget2Bordered,
+		&splittingWidget,
+	}
+
+	resize := func() {
+		textWidgetBordered.Resize(Rect{x: 0, y: 0, x1: 40, y1: 10})
+		listWidgetBordered.Resize(Rect{x: 41, y: 0, x1: c.rect.x1, y1: 20})
+		textwidget2Bordered.Resize(Rect{x: 0, y: 21, x1: c.rect.x1, y1: 25})
+		splittingWidget.Resize(Rect{x: 0, y: 26, x1: c.rect.x1, y1: c.rect.y1})
+	}
+
+	width, height := screen.Size()
+	c.rect = Rect{x1: width - 1, y1: height - 1}
+	resize()
+
+	terminalEventsChan := make(chan tcell.Event, 16)
+	go func() {
+		for {
+			terminalEventsChan <- screen.PollEvent()
+		}
+	}()
+
+	for {
+		screen.Fill(' ', tcell.StyleDefault)
+
+		c.Render()
+
+		screen.Show()
+
+		select {
+		case ev := <-terminalEventsChan:
+			switch ev := ev.(type) {
+			case *tcell.EventResize:
+				width, height := ev.Size()
+				c.rect = Rect{x1: width - 1, y1: height - 1}
+				resize()
+				screen.Sync()
+			case *tcell.EventKey:
+				switch {
+				case ev.Rune() == 'j':
+					listWidget.Down()
+				case ev.Rune() == 'k':
+					listWidget.Up()
+				case ev.Rune() == 'g':
+					listWidget.First()
+				case ev.Rune() == 'G':
+					listWidget.Last()
+				case ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC:
+					return
+				}
+			}
+		case l := <-logs:
+			listWidget.lines = append(listWidget.lines, l)
+			listWidget.Last()
+			c.Render()
+		}
+	}
+}
+
+func (c *Compositor) Render() {
+	for _, w := range c.widgets {
+		w.Render()
+	}
+}
+
 func run() {
 	initScreen()
 	cleanup := func() {
@@ -209,98 +306,8 @@ func run() {
 		}
 	}
 	defer cleanup()
-
-	termW, termH := screen.Size()
-	c := Compositor{rect: Rect{x1: termW - 1, y1: termH - 1}}
-
-	//
-	// type C struct{
-	//     t TextWidget
-	//     l ListWidget
-	//     s SplitWidget
-	// }
-	// func (c *C) Resize(r Rect) {
-	//     c.t.Resize(/*...*/)
-	//     c.l.Resize(/*...*/)
-	// }
-
-	textWidget := TextWidget{text: "abcdefghiklmnopqrstuvwxyzw"}
-	textWidgetBordered := BorderedWidget{inner: &textWidget}
-	textWidgetBordered.Resize(Rect{x: 0, y: 0, x1: 5, y1: 4})
-
-	listWidget := ListWidget{
-		lines:    []string{"00000000", "111111111", "222222222", "333333333333333", "4444", "55555", "666666666", "777777777777", "888888888888", "999999999"},
-		selected: 2,
-		offset:   1,
-	}
-	listWidgetBordered := BorderedWidget{inner: &listWidget}
-	listWidgetBordered.Resize(Rect{x: 6, y: 0, x1: 15, y1: 6})
-
-    logsChan := make(chan string, 1024)
-    go func() {
-        c := 0
-        for {
-            time.Sleep(3 * time.Second)
-            listWidget.lines = append(listWidget.lines, fmt.Sprintf("INFO %d%d%d", c, c, c))
-            c++
-        }
-    }()
-
-
-	textWidget2 := TextWidget{text: "!@#$_+)+_)+_+_((*()&(*&(*(*()*()_)#%$%$$%^$^%$$##@#######%$_%^&*()_+{}:'>?()*()#&(!&(*&!!$&*<?"}
-	textwidget2Bordered := BorderedWidget{inner: &textWidget2, title: "title"}
-	textwidget2Bordered.Resize(Rect{x: 0, y: 7, x1: termW - 1, y1: 12})
-
-	left := TextWidget{text: "LEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFTLEFT"}
-	right := TextWidget{text: "RIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHTRIGHRIGHTRIGHTRIGHTRIGHTRIGH"}
-	splittingWidget := SplitWidget{left: &left, right: &right, horizontal: false, ratio: 25}
-	splittingWidget.Resize(Rect{x: 0, y: 13, x1: 30, y1: 32})
-
-	c.widgets = []Widget{
-		&listWidgetBordered,
-		&textWidgetBordered,
-		&textwidget2Bordered,
-		&splittingWidget,
-	}
-
-    terminalEventsChan := make(chan tcell.Event, 16)
-    go func() {
-        for {
-            terminalEventsChan <- screen.PollEvent()
-        }
-    }()
-
-	for {
-		screen.Fill(' ', tcell.StyleDefault)
-
-		c.Render()
-
-		screen.Show()
-
-        select {
-        case ev := <-terminalEventsChan:
-            switch ev := ev.(type) {
-            case *tcell.EventResize:
-                // termW, termH := ev.Size()
-                // c.rect = (Rect{x1: termW-1, y1: termY-1})
-                c.Render()
-                screen.Sync()
-            case *tcell.EventKey:
-                if ev.Rune() == 'j' {
-                    listWidget.Down()
-                }
-                if ev.Rune() == 'k' {
-                    listWidget.Up()
-                }
-                if ev.Rune() == 'q' || ev.Key() == tcell.KeyCtrlC {
-                    return
-                }
-            }
-        case <-logsChan:
-        }
-
-	}
-
+	c := Compositor{}
+	c.Start()
 }
 
 func main() {
